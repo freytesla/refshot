@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>跳转中…</title>
+    <script>
+      // GitHub Pages 不支持 SPA 路由重写：把未知路径重定向回应用入口
+      // 项目页（username.github.io/repo）保留 /repo 前缀；用户页（username.github.io）用 /
+      (function () {
+        var segs = location.pathname.split('/');
+        var base = segs.length > 2 && segs[1] ? '/' + segs[1] : '/';
+        location.replace(base + (location.search || ''));
+      })();
+    </script>
+  </head>
+  <body>
+    <p>正在跳转到「参照拍照」…</p>
+  </body>
+</html>

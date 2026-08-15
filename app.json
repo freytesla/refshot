@@ -1,0 +1,69 @@
+{
+  "expo": {
+    "name": "参照拍照",
+    "slug": "refshot",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "refshot",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.refshot.camera",
+      "infoPlist": {
+        "NSCameraUsageDescription": "需要使用相机拍摄参照照片",
+        "NSPhotoLibraryUsageDescription": "需要访问相册以导入参考图片和保存拍摄的照片",
+        "NSPhotoLibraryAddUsageDescription": "需要保存拍摄的照片到相册",
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "permissions": ["CAMERA", "READ_MEDIA_IMAGES", "WRITE_EXTERNAL_STORAGE"]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#0B0B0F",
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 200
+        }
+      ],
+      "expo-sharing",
+      ["expo-build-properties", { "ios": { "deploymentTarget": "16.4" } }],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "需要使用相机拍摄参照照片",
+          "recordAudioAndroid": false
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "需要访问相册以导入参考图片和保存拍摄的照片",
+          "savePhotosPermission": "需要保存拍摄的照片到相册",
+          "isAccessMediaLocationEnabled": false
+        }
+      ],
+      "expo-image-picker",
+      "expo-localization"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": ""
+      }
+    }
+  }
+}
