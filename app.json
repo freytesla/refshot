@@ -7,6 +7,9 @@
     "icon": "./assets/icon.png",
     "scheme": "refshot",
     "userInterfaceStyle": "automatic",
+    "experiments": {
+      "baseUrl": "/refshot"
+    },
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.refshot.camera",
