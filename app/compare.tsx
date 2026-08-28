@@ -7,6 +7,9 @@ import { findReference } from '../src/lib/storage';
 import { t } from '../src/lib/i18n';
 import { Icon } from '../src/components/Icon';
 import { webDownloadImage, webShareImage } from '../src/lib/web';
+import { useAds } from '../src/lib/ads';
+import { ADS_CONFIG } from '../src/lib/adsConfig';
+import { getMembership, isProActive } from '../src/lib/membership';
 
 export default function CompareScreen() {
   const { refId, photo } = useLocalSearchParams<{ refId: string; photo: string }>();
@@ -15,9 +18,12 @@ export default function CompareScreen() {
 
   const [reference, setReference] = useState<ReferenceImage | null>(null);
   const [saving, setSaving] = useState(false);
+  const [isPro, setIsPro] = useState(false);
+  const ads = useAds();
 
   useEffect(() => {
     void findReference(refId ?? '').then(setReference);
+    void getMembership().then((m) => setIsPro(isProActive(m)));
   }, [refId]);
 
   const onSave = async () => {
@@ -26,6 +32,9 @@ export default function CompareScreen() {
       webDownloadImage(photo, 'refshot-photo.jpg');
       Alert.alert(t('saved'), t('webSaveHint'));
       return;
+    }
+    if (ADS_CONFIG.enableInterstitialOnSave && !isPro) {
+      await ads.showInterstitial();
     }
     setSaving(true);
     try {

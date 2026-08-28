@@ -5,17 +5,33 @@ import Constants from 'expo-constants';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { clearReferences, getHoldBehavior, setHoldBehavior, HoldBehavior } from '../src/lib/storage';
 import { t } from '../src/lib/i18n';
+import { useAds } from '../src/lib/ads';
+import {
+  TRIAL_ADS_REQUIRED,
+  TRIAL_DAYS,
+  getMembership,
+  grantProTrial,
+  isProActive,
+  Membership,
+  unlockPro,
+} from '../src/lib/membership';
 import { Icon } from '../src/components/Icon';
 
 export default function SettingsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [holdBehavior, setHoldBehaviorState] = useState<HoldBehavior>('hide');
+  const [membership, setMembership] = useState<Membership | null>(null);
+  const [rewardProgress, setRewardProgress] = useState(0);
+  const ads = useAds();
 
   useEffect(() => {
     let cancelled = false;
     void getHoldBehavior().then((value) => {
       if (!cancelled) setHoldBehaviorState(value);
+    });
+    void getMembership().then((value) => {
+      if (!cancelled) setMembership(value);
     });
     return () => {
       cancelled = true;
@@ -26,6 +42,33 @@ export default function SettingsScreen() {
     setHoldBehaviorState(value);
     void setHoldBehavior(value);
   };
+
+  const onWatchTrial = async () => {
+    for (let i = 0; i < TRIAL_ADS_REQUIRED; i++) {
+      setRewardProgress(i + 1);
+      const watched = await ads.showRewarded();
+      if (!watched) {
+        setRewardProgress(0);
+        Alert.alert(t('membershipCanceled'));
+        return;
+      }
+    }
+    const next = await grantProTrial(TRIAL_DAYS);
+    setMembership(next);
+    setRewardProgress(0);
+    Alert.alert(t('membershipGranted'));
+  };
+
+  const onDevUnlock = async () => {
+    const next = await unlockPro();
+    setMembership(next);
+    Alert.alert(t('membershipGranted'));
+  };
+
+  const proActive = membership ? isProActive(membership) : false;
+  const expiresText = membership?.proExpiresAt
+    ? new Date(membership.proExpiresAt).toLocaleDateString()
+    : t('membershipPermanent');
 
   const onClear = () => {
     Alert.alert(t('settingsClearConfirm'), t('settingsClearConfirmBody'), [
@@ -53,6 +96,30 @@ export default function SettingsScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
+        <Text style={styles.sectionTitle}>{t('membershipSection')}</Text>
+        <View style={styles.card}>
+          <Text style={styles.rowLabel}>{proActive ? t('membershipPro') : t('membershipFree')}</Text>
+          {proActive ? (
+            <Text style={styles.rowDesc}>
+              {t('membershipExpires')}：{expiresText}
+            </Text>
+          ) : null}
+
+          {!proActive ? (
+            <Pressable style={styles.trialBtn} onPress={() => void onWatchTrial()} disabled={rewardProgress > 0}>
+              <Text style={styles.trialText}>
+                {rewardProgress > 0
+                  ? t('membershipProgress').replace('{i}', String(rewardProgress)).replace('{n}', String(TRIAL_ADS_REQUIRED))
+                  : t('membershipTrialButton').replace('{n}', String(TRIAL_ADS_REQUIRED)).replace('{d}', String(TRIAL_DAYS))}
+              </Text>
+            </Pressable>
+          ) : null}
+
+          <Pressable style={styles.devBtn} onPress={() => void onDevUnlock()}>
+            <Text style={styles.devText}>{t('membershipDev')}</Text>
+          </Pressable>
+        </View>
+
         <Text style={styles.sectionTitle}>{t('settingsOverlayTitle')}</Text>
         <View style={styles.card}>
           <Text style={styles.rowLabel}>{t('holdSection')}</Text>
@@ -131,6 +198,16 @@ const styles = StyleSheet.create({
   rowValue: { color: '#8E8E93', fontSize: 15 },
   rowDesc: { color: '#8E8E93', fontSize: 13, lineHeight: 20, marginTop: 10 },
   sep: { height: StyleSheet.hairlineWidth, backgroundColor: '#2C2C2E' },
+  trialBtn: {
+    marginTop: 12,
+    backgroundColor: '#FFD60A',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  trialText: { color: '#0B0B0F', fontSize: 14, fontWeight: '700' },
+  devBtn: { marginTop: 10, alignItems: 'center', paddingVertical: 6 },
+  devText: { color: '#8E8E93', fontSize: 12 },
   segment: {
     flexDirection: 'row',
     backgroundColor: '#2C2C2E',

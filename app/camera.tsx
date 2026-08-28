@@ -30,6 +30,9 @@ import {
 import { clampOverlayScale } from '../src/lib/geometry';
 import { importFromLibrary } from '../src/lib/import';
 import { t } from '../src/lib/i18n';
+import { MockBanner } from '../src/lib/ads';
+import { ADS_CONFIG } from '../src/lib/adsConfig';
+import { getMembership, isProActive } from '../src/lib/membership';
 import { Icon } from '../src/components/Icon';
 
 type FlashMode = 'off' | 'on' | 'auto';
@@ -63,6 +66,7 @@ export default function CameraScreen() {
   const [peekHolding, setPeekHolding] = useState(false);
   const [shutterHiding, setShutterHiding] = useState(false);
   const [taking, setTaking] = useState(false);
+  const [isPro, setIsPro] = useState(false);
 
   // 顶部下拉小面板（iOS 相机 ⌃ 展开的那条）
   const [controlsOpen, setControlsOpen] = useState(false);
@@ -85,6 +89,8 @@ export default function CameraScreen() {
   useEffect(() => {
     let cancelled = false;
     void (async () => {
+      const membership = await getMembership();
+      if (!cancelled) setIsPro(isProActive(membership));
       const behavior = await getHoldBehavior();
       if (!cancelled) {
         setHoldBehavior(behavior);
@@ -436,6 +442,12 @@ export default function CameraScreen() {
         </BlurView>
       ) : null}
 
+      {ADS_CONFIG.enableBanner && !isPro && !editMode ? (
+        <View style={[styles.bannerSlot, { bottom: insets.bottom + BOTTOM_CONTROLS_H + 10 }]}>
+          <MockBanner />
+        </View>
+      ) : null}
+
       {/* 底部：编辑 / 查看（按住）+ 三件套 */}
       <View style={[styles.bottomArea, { height: BOTTOM_CONTROLS_H, paddingBottom: insets.bottom + 6 }]}>
         <View style={styles.modeRow}>
@@ -601,6 +613,11 @@ const styles = StyleSheet.create({
   },
   editPanelHeader: { marginBottom: 2 },
   editPanelTitle: { color: '#FFFFFF', fontSize: 12, fontWeight: '700', textAlign: 'center', marginBottom: 4 },
+  bannerSlot: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+  },
   modeRow: { flexDirection: 'row', justifyContent: 'center', gap: 14, marginBottom: 8 },
   bottomPill: {
     flexDirection: 'row',
