@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -14,7 +14,7 @@ import {
 import Slider from '@react-native-community/slider';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { BlurView } from 'expo-blur';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -28,9 +28,8 @@ import {
   HoldBehavior,
 } from '../src/lib/storage';
 import { clampOverlayScale } from '../src/lib/geometry';
-import { importFromLibrary } from '../src/lib/import';
 import { t } from '../src/lib/i18n';
-import { MockBanner } from '../src/lib/ads';
+import { useAds } from '../src/lib/ads';
 import { ADS_CONFIG } from '../src/lib/adsConfig';
 import { getMembership, isProActive } from '../src/lib/membership';
 import { Icon } from '../src/components/Icon';
@@ -49,7 +48,6 @@ export default function CameraScreen() {
   const [reference, setReference] = useState<ReferenceImage | null>(null);
   const [permission, requestPermission] = useCameraPermissions();
   const [cameraAvailable, setCameraAvailable] = useState(true);
-  const [importing, setImporting] = useState(false);
 
   // 叠加模式：默认原图（半透明），剪影为开关（默认关）
   const [outlineOn, setOutlineOn] = useState(false);
@@ -76,6 +74,8 @@ export default function CameraScreen() {
   const [editMode, setEditMode] = useState(false);
 
   const cameraRef = useRef<CameraView>(null);
+  const ads = useAds();
+  const referenceIdRef = useRef<string | null>(null);
 
   // 取景框 3:4，居中放在顶部控制区与底部控制区之间，框外全黑
   const topBarH = insets.top + 52;
@@ -86,25 +86,34 @@ export default function CameraScreen() {
   const camLeft = (W - camW) / 2;
 
   // 恢复上次使用的参考图 + 按住行为设置
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      const membership = await getMembership();
-      if (!cancelled) setIsPro(isProActive(membership));
-      const behavior = await getHoldBehavior();
-      if (!cancelled) {
-        setHoldBehavior(behavior);
-        setBaseVisible(behavior === 'hide');
-      }
-      const id = await getCurrentReferenceId();
-      if (cancelled || !id) return;
-      const found = await findReference(id);
-      if (!cancelled && found) setReference(found);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  // 每次回到相机页时重载：会员 / 按住行为 / 当前参考图（应用内选图后返回也能生效）
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      void (async () => {
+        const membership = await getMembership();
+        if (!cancelled) setIsPro(isProActive(membership));
+        const behavior = await getHoldBehavior();
+        if (!cancelled) {
+          setHoldBehavior(behavior);
+          setBaseVisible(behavior === 'hide');
+        }
+        const id = await getCurrentReferenceId();
+        if (cancelled || !id) return;
+        const found = await findReference(id);
+        if (!cancelled && found) {
+          if (referenceIdRef.current !== found.id) {
+            resetOverlay();
+          }
+          referenceIdRef.current = found.id;
+          setReference(found);
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }, [])
+  );
 
   // 剪影仍在生成时轮询更新
   useEffect(() => {
@@ -215,23 +224,6 @@ export default function CameraScreen() {
 
   const overlayUri = outlineOn && reference?.stencilUri ? reference.stencilUri : reference?.sourceUri;
 
-  const onPickReference = async () => {
-    if (importing) return;
-    setImporting(true);
-    try {
-      const picked = await importFromLibrary();
-      if (picked) {
-        setReference(picked);
-        await setCurrentReferenceId(picked.id);
-        resetOverlay();
-      }
-    } catch (error) {
-      Alert.alert(t('importFailed'), String(error));
-    } finally {
-      setImporting(false);
-    }
-  };
-
   const onClearReference = () => {
     Alert.alert(t('referenceClearTitle'), t('referenceClearBody'), [
       { text: t('commonCancel'), style: 'cancel' },
@@ -262,6 +254,9 @@ export default function CameraScreen() {
       });
       if (photo) {
         setShutterHiding(false);
+        if (ADS_CONFIG.enableInterstitialAfterCapture && !isPro) {
+          await ads.showInterstitial();
+        }
         router.push({
           pathname: '/compare',
           params: { refId: reference?.id ?? '', photo: photo.uri },
@@ -442,12 +437,6 @@ export default function CameraScreen() {
         </BlurView>
       ) : null}
 
-      {ADS_CONFIG.enableBanner && !isPro && !editMode ? (
-        <View style={[styles.bannerSlot, { bottom: insets.bottom + BOTTOM_CONTROLS_H + 10 }]}>
-          <MockBanner />
-        </View>
-      ) : null}
-
       {/* 底部：编辑 / 查看（按住）+ 三件套 */}
       <View style={[styles.bottomArea, { height: BOTTOM_CONTROLS_H, paddingBottom: insets.bottom + 6 }]}>
         <View style={styles.modeRow}>
@@ -473,7 +462,7 @@ export default function CameraScreen() {
         <View style={styles.bottomRow}>
           <Pressable
             style={styles.thumbBtn}
-            onPress={() => void onPickReference()}
+            onPress={() => router.push('/picker')}
             onLongPress={onClearReference}
             accessibilityLabel={t('cameraTitle')}
           >
@@ -482,7 +471,6 @@ export default function CameraScreen() {
             ) : (
               <Icon name="image" size={22} color="rgba(255,255,255,0.85)" />
             )}
-            {importing ? <ActivityIndicator style={styles.thumbSpinner} color="#FFD60A" size="small" /> : null}
           </Pressable>
 
           <Pressable
@@ -613,11 +601,6 @@ const styles = StyleSheet.create({
   },
   editPanelHeader: { marginBottom: 2 },
   editPanelTitle: { color: '#FFFFFF', fontSize: 12, fontWeight: '700', textAlign: 'center', marginBottom: 4 },
-  bannerSlot: {
-    position: 'absolute',
-    left: 16,
-    right: 16,
-  },
   modeRow: { flexDirection: 'row', justifyContent: 'center', gap: 14, marginBottom: 8 },
   bottomPill: {
     flexDirection: 'row',

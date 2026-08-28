@@ -5,9 +5,11 @@
 export const ADS_CONFIG = {
   /** 开屏广告（骨架默认开启，仅非会员、每会话一次） */
   enableSplash: true,
-  /** Banner 广告位（选照片界面/相机页底部） */
-  enableBanner: true,
-  /** 保存时插屏（可选，默认关，避免打扰演示） */
+  /** 选照片界面底部 Banner（非会员显示） */
+  enableBannerOnPicker: true,
+  /** 拍完照片后插屏广告（非会员） */
+  enableInterstitialAfterCapture: true,
+  /** 保存时插屏（可选，默认关，避免打扰） */
   enableInterstitialOnSave: false,
   /** 模拟广告时长（秒） */
   rewardedSeconds: 4,

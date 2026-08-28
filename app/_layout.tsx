@@ -49,6 +49,7 @@ export default function RootLayout() {
               <Stack.Screen name="index" />
               <Stack.Screen name="camera" options={{ gestureEnabled: false }} />
               <Stack.Screen name="compare" options={{ gestureEnabled: false }} />
+              <Stack.Screen name="picker" options={{ gestureEnabled: false }} />
               <Stack.Screen name="settings" />
             </Stack>
             <StatusBar style="light" />
