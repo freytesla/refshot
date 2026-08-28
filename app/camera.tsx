@@ -253,6 +253,8 @@ export default function CameraScreen() {
         quality: 1,
         exif: false,
         base64: false,
+        // 前置自拍：成片与镜像预览保持一致，避免自拍后照片左右翻转（web 端生效，原生端忽略）
+        isImageMirror: facing === 'front',
       });
       if (photo) {
         router.push({
