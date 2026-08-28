@@ -16,7 +16,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { BlurView } from 'expo-blur';
 import { useRouter } from 'expo-router';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import Animated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
+import Animated, { runOnJS, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ReferenceImage } from '../src/types';
 import {
@@ -36,7 +36,7 @@ type FlashMode = 'off' | 'on' | 'auto';
 
 const showOutlineMode = Platform.OS !== 'web';
 const CAM_ASPECT = 3 / 4; // 取景框宽:高 = 3:4
-const BOTTOM_CONTROLS_H = 96; // 底部三件套高度（取景框最大化）
+const BOTTOM_CONTROLS_H = 122; // 底部：编辑/查看 + 三件套
 
 export default function CameraScreen() {
   const router = useRouter();
@@ -69,6 +69,9 @@ export default function CameraScreen() {
 
   // 底部上拉框（透明度 / 变焦）
   const [drawerOpen, setDrawerOpen] = useState(false);
+
+  // 编辑模式：仅编辑模式下手势作用于参考图（默认双指=相机变焦）
+  const [editMode, setEditMode] = useState(false);
 
   const cameraRef = useRef<CameraView>(null);
 
@@ -135,6 +138,7 @@ export default function CameraScreen() {
   const savedRotation = useSharedValue(0);
 
   const panGesture = Gesture.Pan()
+    .enabled(editMode)
     .onUpdate((event) => {
       tx.value = savedTx.value + event.translationX;
       ty.value = savedTy.value + event.translationY;
@@ -145,6 +149,7 @@ export default function CameraScreen() {
     });
 
   const pinchGesture = Gesture.Pinch()
+    .enabled(editMode)
     .onUpdate((event) => {
       scale.value = clampOverlayScale(savedScale.value * event.scale);
     })
@@ -153,6 +158,7 @@ export default function CameraScreen() {
     });
 
   const rotateGesture = Gesture.Rotation()
+    .enabled(editMode)
     .onUpdate((event) => {
       rotation.value = savedRotation.value + event.rotation;
     })
@@ -161,6 +167,23 @@ export default function CameraScreen() {
     });
 
   const composedGesture = Gesture.Simultaneous(panGesture, pinchGesture, rotateGesture);
+
+  // 屏幕级双指缩放 → 相机变焦（仅非编辑模式；编辑模式下双指是缩放参考图）
+  const pinchStartZoom = useSharedValue(0);
+  const zoomRef = useRef(0);
+  const updateZoom = (z: number) => {
+    setZoom(z);
+  };
+  const cameraPinch = Gesture.Pinch()
+    .enabled(!editMode)
+    .onStart(() => {
+      pinchStartZoom.value = zoomRef.current;
+    })
+    .onUpdate((event) => {
+      const z = Math.min(1, Math.max(0, pinchStartZoom.value * event.scale));
+      zoomRef.current = z;
+      runOnJS(updateZoom)(z);
+    });
 
   const overlayStyle = useAnimatedStyle(() => ({
     transform: [
@@ -287,7 +310,8 @@ export default function CameraScreen() {
   );
 
   return (
-    <View style={styles.screen}>
+    <GestureDetector gesture={cameraPinch}>
+      <View style={styles.screen}>
       {cameraAvailable && permission?.granted ? (
         <CameraView
           ref={cameraRef}
@@ -331,16 +355,12 @@ export default function CameraScreen() {
             </View>
           ) : null}
 
-          {/* 取景框内半透明：查看参考图（按住） */}
-          <Pressable
-            style={[styles.framePeek, peekHolding && styles.framePeekActive]}
-            onPressIn={() => setPeekHolding(true)}
-            onPressOut={() => setPeekHolding(false)}
-            accessibilityLabel={t('peek')}
-          >
-            <Icon name={peekHolding ? 'eye' : holdBehavior === 'show' ? 'eye-off' : 'eye'} size={15} color="#FFFFFF" />
-            <Text style={styles.framePeekText}>{t('peek')}</Text>
-          </Pressable>
+        </View>
+      ) : null}
+
+      {editMode && reference && cameraAvailable && permission?.granted ? (
+        <View style={[styles.editHint, { top: camTop + 8 }]} pointerEvents="none">
+          <Text style={styles.editHintText}>{t('editModeHint')}</Text>
         </View>
       ) : null}
 
@@ -415,8 +435,27 @@ export default function CameraScreen() {
         </BlurView>
       ) : null}
 
-      {/* 底部：三件套（缩略图 / 快门 / 翻转） */}
+      {/* 底部：编辑 / 查看（按住）+ 三件套 */}
       <View style={[styles.bottomArea, { height: BOTTOM_CONTROLS_H, paddingBottom: insets.bottom + 6 }]}>
+        <View style={styles.modeRow}>
+          <Pressable
+            style={[styles.bottomPill, editMode && styles.bottomPillActive]}
+            onPress={() => setEditMode((v) => !v)}
+            accessibilityLabel={t('editMode')}
+          >
+            <Icon name="move-horizontal" size={15} color={editMode ? '#FFD60A' : '#FFFFFF'} />
+            <Text style={styles.bottomPillText}>{t('editMode')}</Text>
+          </Pressable>
+          <Pressable
+            style={[styles.bottomPill, peekHolding && styles.bottomPillActive]}
+            onPressIn={() => setPeekHolding(true)}
+            onPressOut={() => setPeekHolding(false)}
+            accessibilityLabel={t('peek')}
+          >
+            <Icon name={peekHolding ? 'eye' : holdBehavior === 'show' ? 'eye-off' : 'eye'} size={15} color="#FFFFFF" />
+            <Text style={styles.bottomPillText}>{t('peek')}</Text>
+          </Pressable>
+        </View>
 
         <View style={styles.bottomRow}>
           <Pressable
@@ -497,7 +536,10 @@ export default function CameraScreen() {
               minimumValue={0}
               maximumValue={1}
               value={zoom}
-              onValueChange={setZoom}
+              onValueChange={(v) => {
+                setZoom(v);
+                zoomRef.current = v;
+              }}
               minimumTrackTintColor="#FFD60A"
               maximumTrackTintColor="#3A3A3C"
               thumbTintColor="#FFFFFF"
@@ -505,7 +547,8 @@ export default function CameraScreen() {
           </View>
         </BlurView>
       ) : null}
-    </View>
+      </View>
+    </GestureDetector>
   );
 }
 
@@ -568,20 +611,6 @@ const styles = StyleSheet.create({
   panelBtn: { alignItems: 'center', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 12, minWidth: 62 },
   panelBtnActive: { backgroundColor: 'rgba(255,214,10,0.18)' },
   panelBtnLabel: { color: '#AEAEB2', fontSize: 11, marginTop: 4 },
-  framePeek: {
-    position: 'absolute',
-    top: 10,
-    left: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    backgroundColor: 'rgba(0,0,0,0.38)',
-    borderRadius: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  framePeekActive: { backgroundColor: 'rgba(255,214,10,0.30)' },
-  framePeekText: { color: '#FFFFFF', fontSize: 12, fontWeight: '600' },
   sideHandle: {
     position: 'absolute',
     right: 0,
@@ -611,6 +640,29 @@ const styles = StyleSheet.create({
   sideSliderLabel: { color: '#E5E5EA', fontSize: 11 },
   sideSliderValue: { color: '#8E8E93', fontSize: 11 },
   sideSlider: { width: '100%', height: 28 },
+  modeRow: { flexDirection: 'row', justifyContent: 'center', gap: 14, marginBottom: 8 },
+  bottomPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(255,255,255,0.14)',
+    borderRadius: 15,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+  },
+  bottomPillActive: { backgroundColor: 'rgba(255,214,10,0.26)' },
+  bottomPillText: { color: '#FFFFFF', fontSize: 12, fontWeight: '600' },
+  editHint: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
+  editHintText: {
+    color: '#FFD60A',
+    fontSize: 12,
+    fontWeight: '700',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    overflow: 'hidden',
+  },
   bottomArea: {
     position: 'absolute',
     left: 0,
