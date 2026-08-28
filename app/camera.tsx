@@ -67,8 +67,6 @@ export default function CameraScreen() {
   // 顶部下拉小面板（iOS 相机 ⌃ 展开的那条）
   const [controlsOpen, setControlsOpen] = useState(false);
 
-  // 底部上拉框（透明度 / 变焦）
-  const [drawerOpen, setDrawerOpen] = useState(false);
 
   // 编辑模式：仅编辑模式下手势作用于参考图（默认双指=相机变焦）
   const [editMode, setEditMode] = useState(false);
@@ -257,6 +255,7 @@ export default function CameraScreen() {
         isImageMirror: facing === 'front',
       });
       if (photo) {
+        setShutterHiding(false);
         router.push({
           pathname: '/compare',
           params: { refId: reference?.id ?? '', photo: photo.uri },
@@ -488,37 +487,16 @@ export default function CameraScreen() {
         </View>
       </View>
 
-      {/* 右侧左拉框手柄 */}
-      {!drawerOpen ? (
-        <Pressable
-          style={[styles.sideHandle, { top: camTop + camH / 2 - 26 }]}
-          onPress={() => setDrawerOpen(true)}
-          accessibilityLabel={t('drawerHint')}
-        >
-          <Icon name="sliders-horizontal" size={18} color="#FFFFFF" />
-        </Pressable>
-      ) : null}
-
-      {/* 右侧左拉框：透明度 / 变焦（半透明，贴合取景框右缘） */}
-      {drawerOpen ? (
-        <BlurView intensity={45} tint="dark" style={[styles.sideDrawer, { top: camTop, height: camH }]}>
-          <Pressable
-            style={styles.sideDrawerHeader}
-            onPress={() => setDrawerOpen(false)}
-            hitSlop={8}
-            accessibilityLabel={t('controls')}
-          >
-            <Text style={styles.sideDrawerTitle}>{t('controls')}</Text>
-            <Icon name="x" size={16} color="#FFFFFF" />
-          </Pressable>
-
-          <View style={styles.sideSliderBlock}>
-            <View style={styles.sideSliderHead}>
-              <Text style={styles.sideSliderLabel}>{t('opacity')}</Text>
-              <Text style={styles.sideSliderValue}>{Math.round(opacity * 100)}%</Text>
-            </View>
+      {/* 编辑模式：透明度 / 变焦 */}
+      {editMode && reference ? (
+        <BlurView intensity={70} tint="dark" style={[styles.editPanel, { bottom: insets.bottom + 132 }]}>
+          <View style={styles.editPanelHeader}>
+            <Text style={styles.editPanelTitle}>{t('editMode')}</Text>
+          </View>
+          <View style={styles.sliderRow}>
+            <Text style={styles.sliderLabel}>{t('opacity')}</Text>
             <Slider
-              style={styles.sideSlider}
+              style={styles.slider}
               minimumValue={0}
               maximumValue={1}
               value={opacity}
@@ -527,14 +505,12 @@ export default function CameraScreen() {
               maximumTrackTintColor="#3A3A3C"
               thumbTintColor="#FFFFFF"
             />
+            <Text style={styles.sliderValue}>{Math.round(opacity * 100)}%</Text>
           </View>
-
-          <View style={styles.sideSliderBlock}>
-            <View style={styles.sideSliderHead}>
-              <Text style={styles.sideSliderLabel}>{t('zoom')}</Text>
-            </View>
+          <View style={styles.sliderRow}>
+            <Text style={styles.sliderLabel}>{t('zoom')}</Text>
             <Slider
-              style={styles.sideSlider}
+              style={styles.slider}
               minimumValue={0}
               maximumValue={1}
               value={zoom}
@@ -613,35 +589,18 @@ const styles = StyleSheet.create({
   panelBtn: { alignItems: 'center', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 12, minWidth: 62 },
   panelBtnActive: { backgroundColor: 'rgba(255,214,10,0.18)' },
   panelBtnLabel: { color: '#AEAEB2', fontSize: 11, marginTop: 4 },
-  sideHandle: {
+  editPanel: {
     position: 'absolute',
-    right: 0,
-    width: 36,
-    height: 64,
-    borderTopLeftRadius: 14,
-    borderBottomLeftRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.16)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sideDrawer: {
-    position: 'absolute',
-    right: 0,
-    width: 150,
-    borderTopLeftRadius: 18,
-    borderBottomLeftRadius: 18,
-    paddingHorizontal: 12,
-    paddingTop: 14,
-    paddingBottom: 10,
+    left: 12,
+    right: 12,
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingTop: 10,
+    paddingBottom: 8,
     overflow: 'hidden',
   },
-  sideDrawerHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
-  sideDrawerTitle: { color: '#FFFFFF', fontSize: 13, fontWeight: '600' },
-  sideSliderBlock: { marginTop: 4 },
-  sideSliderHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 },
-  sideSliderLabel: { color: '#E5E5EA', fontSize: 11 },
-  sideSliderValue: { color: '#8E8E93', fontSize: 11 },
-  sideSlider: { width: '100%', height: 28 },
+  editPanelHeader: { marginBottom: 2 },
+  editPanelTitle: { color: '#FFFFFF', fontSize: 12, fontWeight: '700', textAlign: 'center', marginBottom: 4 },
   modeRow: { flexDirection: 'row', justifyContent: 'center', gap: 14, marginBottom: 8 },
   bottomPill: {
     flexDirection: 'row',
